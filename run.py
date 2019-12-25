@@ -110,9 +110,9 @@ class Linear(Layer):
         self.in_features = in_features
         self.out_features = out_features
 
-        self.weight = np.random.normal(size=[in_features, out_features])*0.1
+        self.weight = np.random.normal(size=[in_features, out_features])*0.01
         if bias:
-            self.bias = np.random.normal(size=out_features)*0.1
+            self.bias = np.random.normal(size=out_features)*0.01
         else:
             self.bias = None
 
@@ -186,8 +186,8 @@ class Conv2d(Layer):
         self.input_n = 1
 
         # parameters
-        self.weight = np.random.normal(size=[out_channels, in_channels, kernel_size, kernel_size])*0.1
-        self.bias = np.random.normal(size=[out_channels])*0.1
+        self.weight = np.random.normal(size=[out_channels, in_channels, kernel_size, kernel_size])*0.01
+        self.bias = np.random.normal(size=[out_channels])*0.01
 
 
 
@@ -382,15 +382,21 @@ class MyNet():
         self.layers.append(Conv2d(8, 16, 5))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(16, 16, 5))
+        self.layers.append(Conv2d(16, 32, 5))
+        self.layers.append(Relu())
+        self.layers.append(MaxPooling(2, 2))
+        self.layers.append(Conv2d(32, 32, 5))
+        self.layers.append(Relu())
+        self.layers.append(MaxPooling(2, 2))
+        self.layers.append(Conv2d(32, 64, 5))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
         self.layers.append(Flatten())
-        self.layers.append(Linear(16*16*16, 512))
+        self.layers.append(Linear(64, 64))
         self.layers.append(Relu())
-        self.layers.append(Linear(512, 128))
+        self.layers.append(Linear(64, 32))
         self.layers.append(Relu())
-        self.layers.append(Linear(128, 2))
+        self.layers.append(Linear(32, 2))
         self.layers.append(SoftMax())
 
 
@@ -472,7 +478,6 @@ for ep in range(5):
     print("========start Epoch {} ======".format(ep))
     loader.shuffle_train()
     for iteration in range(len(loader)):
-        iteration=0
         print('')
         print('========training {}/{}'.format(iteration+1, len(loader)))
         train_dict = loader[iteration]
