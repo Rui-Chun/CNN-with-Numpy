@@ -32,17 +32,12 @@ classes = ('plane', 'car', 'bird', 'cat',
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+        self.fc1 = nn.Linear(32*32*3, 512)
+        self.fc2 = nn.Linear(512, 128)
+        self.fc3 = nn.Linear(128, 10)
 
     def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
+        x = x.view(-1, 32*32*3)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -321,17 +316,9 @@ class MyNet():
         self.make_layers()
 
     def make_layers(self):
-        self.layers.append(Conv2d(3, 6, 5))
-        self.layers.append(Relu())
-        self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(6, 16, 5))
-        self.layers.append(Relu())
-        self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Flatten())
-        self.layers.append(Linear(16 * 5 * 5, 120))
-        self.layers.append(Relu())
-        self.layers.append(Linear(120, 84))
-        self.layers.append(Linear(84, 10))
+        self.layers.append(Linear(32*32, 512))
+        self.layers.append(Linear(512, 128))
+        self.layers.append(Linear(128, 10))
         self.layers.append(SoftMax())
 
         for la in range(len(self.layers)):
@@ -368,16 +355,20 @@ class MyNet():
         pass
 
 
-net = MyNet()
+net = Net()
 ########################################################################
 # 4. Train the network
 # ^^^^^^^^^^^^^^^^^^^^
+import torch.optim as optim
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(net.parameters(), lr=0.001)
 #
 # This is when things start to get interesting.
 # We simply have to loop over our data iterator, and feed the inputs to the
 # network and optimize.
 
-for epoch in range(2):  # loop over the dataset multiple times
+for epoch in range(10):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(trainloader, 0):
@@ -386,9 +377,14 @@ for epoch in range(2):  # loop over the dataset multiple times
 
         train_data = {"data":inputs, "labels":labels}
 
+        # zero the parameter gradients
+        optimizer.zero_grad()
 
-
-        loss = net.train(train_data)
+        # forward + backward + optimize
+        outputs = net(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
 
         # print statistics
         running_loss += loss
@@ -402,8 +398,11 @@ print('Finished Training')
 ########################################################################
 # Let's quickly save our trained model:
 
-PATH = './cifar_net.pkl'
-net.save_model(PATH)
+# PATH = './cifar_net.pkl'
+# net.save_model(PATH)
+
+PATH = './cifar_net.pth'
+torch.save(net.state_dict(), PATH)
 
 ########################################################################
 # See `here <https://pytorch.org/docs/stable/notes/serialization.html>`_
@@ -432,8 +431,11 @@ net.save_model(PATH)
 # Next, let's load back in our saved model (note: saving and re-loading the model
 # wasn't necessary here, we only did it to illustrate how to do so):
 
-net_file = open(PATH, 'rb')
-net = pickle.load(net_file)
+# net_file = open(PATH, 'rb')
+# net = pickle.load(net_file)
+
+net = Net()
+net.load_state_dict(torch.load(PATH))
 
 ########################################################################
 # Okay, now let us see what the neural network thinks these examples above are:
@@ -460,7 +462,8 @@ total = 0
 with torch.no_grad():
     for data in testloader:
         images, labels = data
-        outputs = net.test(images)
+        # outputs = net.test(images)
+        outputs = net(images)
         _, predicted = torch.max(outputs, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()

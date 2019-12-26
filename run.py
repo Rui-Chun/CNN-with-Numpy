@@ -74,7 +74,7 @@ class LFWDataloader():
 
     def data_transform(self, data_out):
         # potential data preprocess
-        return (data_out/255 - 0.5)/0.5
+        return data_out
 
     def __len__(self):
         return self.train_batch_num
@@ -110,9 +110,9 @@ class Linear(Layer):
         self.in_features = in_features
         self.out_features = out_features
 
-        self.weight = np.random.normal(size=[in_features, out_features])*0.01
+        self.weight = np.random.normal(size=[in_features, out_features])*0.1
         if bias:
-            self.bias = np.random.normal(size=out_features)*0.01
+            self.bias = np.random.normal(size=out_features)*0.1
         else:
             self.bias = None
 
@@ -171,7 +171,7 @@ class Linear(Layer):
 
 class Conv2d(Layer):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, padding_mode=False, bias=True):
+                 padding=0, padding_mode=False, bias=False):
         super(Conv2d, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -179,15 +179,15 @@ class Conv2d(Layer):
         self.stride = stride
         self.padding = padding
         self.padding_mode = padding_mode
-        self.bias = bias
+        self.isbias = bias
 
         self.batch_size = 1
         self.input_m = 1
         self.input_n = 1
 
         # parameters
-        self.weight = np.random.normal(size=[out_channels, in_channels, kernel_size, kernel_size])*0.01
-        self.bias = np.random.normal(size=[out_channels])*0.01
+        self.weight = np.random.normal(size=[out_channels, in_channels, kernel_size, kernel_size]) *0.1
+        self.bias = np.random.normal(size=[out_channels]) *0.1
 
 
 
@@ -205,7 +205,10 @@ class Conv2d(Layer):
             for out_id in range(self.out_channels):
                 for in_id in range(self.in_channels):
                     temp_out[in_id] = signal.convolve2d(input[ba, :, :, in_id], self.weight[out_id, in_id, ::-1, ::-1], mode='valid')
-                output[ba, :, :, out_id] = temp_out.sum(axis=0) + self.bias[out_id]
+                if self.isbias:
+                    output[ba, :, :, out_id] = temp_out.sum(axis=0) + self.bias[out_id]
+                else:
+                    output[ba, :, :, out_id] = temp_out.sum(axis=0)
 
         if self.next_layer is None:
             return output
@@ -237,8 +240,9 @@ class Conv2d(Layer):
         self.weight -= lr * gradient_weight
 
         # update bias
-        gradient_bias = next_gradient.mean(axis=0).sum(axis=(0, 1))
-        self.bias -= lr * gradient_bias
+        if self.isbias:
+            gradient_bias = next_gradient.mean(axis=0).sum(axis=(0, 1))
+            self.bias -= lr * gradient_bias
 
         if self.pre_layer is not None:
             self.pre_layer.back_prop(gradient_in, lr)
@@ -253,7 +257,9 @@ class Relu(Layer):
         return self.next_layer.forward(np.maximum(input, 0))
 
     def back_prop(self, next_gradient, lr):
-        self.pre_layer.back_prop(np.where(self.input_x > 0, next_gradient, 0), lr)
+        temp = np.where(self.input_x > 0, 1, 0)
+
+        self.pre_layer.back_prop(next_gradient * temp, lr)
 
 
 class MaxPooling(Layer):
@@ -376,27 +382,25 @@ class MyNet():
         self.make_layers()
 
     def make_layers(self):
-        self.layers.append(Conv2d(2, 8, 5))
+        self.layers.append(Conv2d(2, 8, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(8, 16, 5))
+        self.layers.append(Conv2d(8, 16, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(16, 32, 5))
+        self.layers.append(Conv2d(16, 32, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(32, 32, 5))
+        self.layers.append(Conv2d(32, 32, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(32, 64, 5))
+        self.layers.append(Conv2d(32, 64, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
         self.layers.append(Flatten())
-        self.layers.append(Linear(64, 64))
+        self.layers.append(Linear(3*3*64, 128))
         self.layers.append(Relu())
-        self.layers.append(Linear(64, 32))
-        self.layers.append(Relu())
-        self.layers.append(Linear(32, 2))
+        self.layers.append(Linear(128, 2))
         self.layers.append(SoftMax())
 
 
@@ -474,7 +478,7 @@ else:
 
 best_f1 = 0
 
-for ep in range(5):
+for ep in range(300):
     print("========start Epoch {} ======".format(ep))
     loader.shuffle_train()
     for iteration in range(len(loader)):
