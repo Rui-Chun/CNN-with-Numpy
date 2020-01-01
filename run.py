@@ -459,13 +459,13 @@ class MyNet():
 
 
 
-Load_Model = False
+Load_Model =  True
 dataset_path = './LFW/'
 model_path = './new_model_best.pkl'
 model_save_path = './new_model_best.pkl'
 model_temp_path = './new_model_temp.pkl'
 
-Learning_rate = 0.01
+Learning_rate = 0.0005
 
 loader = LFWDataloader(dataset_path, 4)
 
@@ -476,9 +476,9 @@ if Load_Model:
 else:
     face_net = MyNet()
 
-best_f1 = 0
+best_f1 = 0.70
 
-for ep in range(300):
+for ep in range(200):
     print("========start Epoch {} ======".format(ep))
     loader.shuffle_train()
     for iteration in range(len(loader)):
@@ -495,7 +495,7 @@ for ep in range(300):
                 print("=======Testing now   {}/{}".format(test_itr-loader.train_batch_num+1, -loader.train_batch_num+loader.total_batch_num))
                 test_dict = loader[test_itr]
                 loss_, TP_, TN_, FP_, FN_ = face_net.test(test_dict)
-                loss+=loss_; TP+=TP_; TN+=TN_; FP+=FP_; FN=FN_
+                loss+=loss_; TP+=TP_; TN+=TN_; FP+=FP_; FN+=FN_
             print('loss per batch= {}'.format(loss/(loader.total_batch_num-loader.train_batch_num)))
             accu = (TP + TN)/(TP + FP + FN + TN)
             prec = TP /(TP + FP)
@@ -505,4 +505,5 @@ for ep in range(300):
             if f1_score > best_f1:
                 best_f1 = f1_score
                 face_net.save_model(model_save_path)
-            print("accu= {}, F1 score= {}".format(accu, f1_score))
+            print("total test num= {}, TP = {}; TN = {}; FP = {}; FN = {} ".format((TP+TN+FP+FN), TP, TN, FP, FN))
+            print("accu= {}, prec={}, F1 score= {}".format(accu, prec, f1_score))
