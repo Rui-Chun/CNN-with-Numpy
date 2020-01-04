@@ -4,18 +4,7 @@ from PIL import Image
 import math
 from scipy import signal
 import pickle
-
-Load_Model =  True
-dataset_path = './LFW/'
-model_path = './trained_models/best_model_run_70_small.pkl'
-model_save_path = './new_model_best.pkl'
-model_temp_path = './new_model_temp.pkl'
-
-DoTrain = False
-Eval_path = './LFW/match pairs/'
-Result_path = './Results.txt'
-
-Learning_rate = 0.0005
+from datetime import datetime
 
 
 class LFWDataloader():
@@ -44,9 +33,9 @@ class LFWDataloader():
             pair = []
             for img_name in os.listdir(path):
                 img = Image.open(os.path.join(path, img_name)).convert('L')
-                img = img.resize((150, 150))
+                img = img.resize((200, 200))
                 img = (np.array(img) / 255 - 0.5) / 0.5
-                pair.append(img.reshape([150, 150, 1]))
+                pair.append(img.reshape([200, 200, 1]))
             pair_array = np.concatenate((pair[0], pair[1]), axis=2)
             data_match.append(pair_array)
         print('#####Get match pairs done#####')
@@ -58,9 +47,9 @@ class LFWDataloader():
             pair = []
             for img_name in os.listdir(path):
                 img = Image.open(os.path.join(path, img_name)).convert('L')
-                img = img.resize((150, 150))
+                img = img.resize((200, 200))
                 img = (np.array(img)/255-0.5)/0.5
-                pair.append(img.reshape([150, 150, 1]))
+                pair.append(img.reshape([200, 200, 1]))
             pair_array = np.concatenate((pair[0], pair[1]), axis=2)
             data_mismatch.append(pair_array)
         print('#####Get mis match pairs done#####')
@@ -309,7 +298,7 @@ class SoftMax(Layer):
         self.gradient_in = None
 
     def forward(self, input, with_gradient=True):
-        # print('softmax input= \n {}'.format(input))
+        print('softmax input= \n {}'.format(input))
         self.batch_size = input.shape[0]
         feature_len = input.shape[1]
         self.input_x = input.copy()
@@ -392,23 +381,29 @@ class MyNet():
         self.make_layers()
 
     def make_layers(self):
-        self.layers.append(Conv2d(2, 8, 3))
+        self.layers.append(Conv2d(2, 16, 3))
         self.layers.append(Relu())
-        self.layers.append(MaxPooling(2, 2))
-        self.layers.append(Conv2d(8, 16, 3))
+        self.layers.append(MaxPooling(2,2))
+        self.layers.append(Conv2d(16, 16, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
         self.layers.append(Conv2d(16, 32, 3))
         self.layers.append(Relu())
-        self.layers.append(MaxPooling(2, 2))
         self.layers.append(Conv2d(32, 32, 3))
         self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
         self.layers.append(Conv2d(32, 64, 3))
         self.layers.append(Relu())
+        self.layers.append(Conv2d(64, 64, 3))
+        self.layers.append(Relu())
+        self.layers.append(MaxPooling(2, 2))
+        self.layers.append(Conv2d(64, 64, 3))
+        self.layers.append(Relu())
+        self.layers.append(Conv2d(64, 128, 3))
+        self.layers.append(Relu())
         self.layers.append(MaxPooling(2, 2))
         self.layers.append(Flatten())
-        self.layers.append(Linear(3*3*64, 128))
+        self.layers.append(Linear(3*3*128, 128))
         self.layers.append(Relu())
         self.layers.append(Linear(128, 2))
         self.layers.append(SoftMax())
@@ -444,20 +439,21 @@ class MyNet():
         Loss = - y * np.log(out)
         out_choices = 1-np.argmax(out, axis=1)
 
-        TP=0; TN=0; FP=0; FN=0
+        TP_ba=0; TN_ba=0; FP_ba=0; FN_ba=0
         for ba in range(out.shape[0]):
             if out_choices[ba] == test_dict['labels'][ba] and out_choices[ba] == 1:
-                TP +=1
+                TP_ba +=1
             if out_choices[ba] == test_dict['labels'][ba] and out_choices[ba] == 0:
-                TN +=1
+                TN_ba +=1
             if out_choices[ba] != test_dict['labels'][ba] and out_choices[ba] == 1:
-                FP +=1
+                FP_ba +=1
             if out_choices[ba] != test_dict['labels'][ba] and out_choices[ba] == 0:
-                FN +=1
+                FN_ba +=1
 
-        return [Loss.sum(), TP, TN, FP, FN]
+        return [Loss.sum(), TP_ba, TN_ba, FP_ba, FN_ba]
 
     def save_model(self, model_path):
+
         for la in range(len(self.layers)):
             self.layers[la].input_x = None
 
@@ -473,72 +469,58 @@ class MyNet():
         file.close()
         print('=======saved model to {}======'.format(model_path))
 
-    def eval(self, eval_path, result_file):
-        print('Evaluating Now')
-        out_file = open(result_file, "w")
-
-        dir_list = os.listdir(eval_path)
-        dir_list.sort()
-        for idy in range(len(dir_list)):
-            print("{}/{}".format(idy+1, len(dir_list)))
-            if dir_list[idy][0]=='.':
-                continue
-            pair = []
-            path1 = os.path.join(eval_path, dir_list[idy])
-            for img_name in os.listdir(path1):
-                img = Image.open(os.path.join(path1, img_name)).convert('L')
-                img = img.resize((150, 150))
-                img = (np.array(img) / 255 - 0.5) / 0.5
-                pair.append(img.reshape([1, 150, 150, 1]))
-            eval_data = np.concatenate((pair[0], pair[1]), axis=3)
-            model_out = self.layers[0].forward(eval_data, with_gradient=False)
-            out_choice = 1-np.argmax(model_out)
-            out_file.write("{}\n".format(out_choice))
-        
-        out_file.close()
+    def eval(self):
+        pass
 
 
-if __name__=='__main__':
 
-    if Load_Model:
-        file = open(model_path, 'rb')
-        face_net = pickle.load(file)
-        file.close()
-    else:
-        face_net = MyNet()
 
-    if DoTrain:
-        best_f1 = 0.70
-        loader = LFWDataloader(dataset_path, 4)
+Load_Model = False
+dataset_path = './LFW/'
+model_path = './model_best_vgg.pkl'
+model_save_path = './model_best_vgg.pkl'
+model_temp_path = './model_temp_vgg.pkl'
 
-        for ep in range(200):
-            print("========start Epoch {} ======".format(ep))
-            loader.shuffle_train()
-            for iteration in range(len(loader)):
-                print('')
-                print('========training {}/{}'.format(iteration+1, len(loader)))
-                train_dict = loader[iteration]
-                face_net.train(train_dict)
+Learning_rate = 0.01
 
-                if iteration % 150 == 149:
-                    print()
-                    print('==========start Testing========')
-                    loss=0; TP = 0; TN = 0; FP = 0; FN = 0
-                    for test_itr in range(loader.train_batch_num, loader.total_batch_num):
-                        print("=======Testing now   {}/{}".format(test_itr-loader.train_batch_num+1, -loader.train_batch_num+loader.total_batch_num))
-                        test_dict = loader[test_itr]
-                        loss_, TP_, TN_, FP_, FN_ = face_net.test(test_dict)
-                        loss+=loss_; TP+=TP_; TN+=TN_; FP+=FP_; FN+=FN_
-                    print('loss per batch= {}'.format(loss/(loader.total_batch_num-loader.train_batch_num)))
-                    accu = (TP + TN)/(TP + FP + FN + TN)
-                    prec = TP /(TP + FP)
-                    f1_score = 2*(accu*prec)/(accu+prec)
+loader = LFWDataloader(dataset_path, 4)
 
-                    face_net.save_model(model_temp_path)
-                    if f1_score > best_f1:
-                        best_f1 = f1_score
-                        face_net.save_model(model_save_path)
-                    print("total test num= {}, TP = {}; TN = {}; FP = {}; FN = {} ".format((TP+TN+FP+FN), TP, TN, FP, FN))
-                    print("accu= {}, prec={}, F1 score= {}".format(accu, prec, f1_score))
+if Load_Model:
+    file = open(model_path, 'rb')
+    face_net = pickle.load(file)
+    file.close()
+else:
+    face_net = MyNet()
 
-    face_net.eval(Eval_path, Result_path)
+best_f1 = 0
+
+for ep in range(300):
+    print(datetime.now())
+    print("========start Epoch {} ======".format(ep))
+    loader.shuffle_train()
+    for iteration in range(len(loader)):
+        print('')
+        print('========training {}/{}'.format(iteration+1, len(loader)))
+        train_dict = loader[iteration]
+        face_net.train(train_dict)
+
+        if iteration % 200 == 199:
+            print(datetime.now())
+            print('==========start Testing========')
+            loss=0; TP = 0; TN = 0; FP = 0; FN = 0
+            for test_itr in range(loader.train_batch_num, loader.total_batch_num):
+                print("=======Testing now   {}/{}".format(test_itr-loader.train_batch_num+1, -loader.train_batch_num+loader.total_batch_num))
+                test_dict = loader[test_itr]
+                loss_, TP_, TN_, FP_, FN_ = face_net.test(test_dict)
+                loss+=loss_; TP+=TP_; TN+=TN_; FP+=FP_; FN+=FN_
+            print('loss per batch= {}'.format(loss/(loader.total_batch_num-loader.train_batch_num)))
+            recall = (TP)/(TP + FN)
+            prec = TP /(TP + FP)
+            f1_score = 2*(recall*prec)/(recall+prec)
+
+            face_net.save_model(model_temp_path)
+            if f1_score > best_f1:
+                best_f1 = f1_score
+                face_net.save_model(model_save_path)
+            print("total test num= {}, TP = {}; TN = {}; FP = {}; FN = {} ".format((TP+TN+FP+FN), TP, TN, FP, FN))
+            print("recall= {}, prec={}, F1 score= {}".format(recall, prec, f1_score))
